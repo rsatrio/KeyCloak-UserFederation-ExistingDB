@@ -27,5 +27,5 @@ Use mvn package to build the module into jar file
 select password from wp_users where email=?)
 	1. Query to Get User Data: Query to get the user data to be imported to keycloak. Only two columns permitted and the name have to be email and firstName (example:select  email,nama as firstName from wp_users where email=?)
 	1. Klik save
-1. It is done, you can try to login in the realm's client with username/password from existing DB  
+	1. It is done, you can try to login in the realm's client with username/password from existing DB  
 
