@@ -32,6 +32,7 @@
 
 package com.rizky.keycloak.federationdb;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
@@ -61,163 +62,199 @@ UserLookupProvider
 
 {
 
-	private  KeycloakSession session;
-	private  ComponentModel model;
-	private UserModel userData;
-	private UserDatabase userDb;
-	private Logger log1=LoggerFactory.getLogger(FederationDBProvider.class);
-	private InitialContext initCtx;
+    private  KeycloakSession session;
+    private  ComponentModel model;
+    private UserModel userData;
+    private UserDatabase userDb;
+    private Logger log1=LoggerFactory.getLogger(FederationDBProvider.class);
+    private InitialContext initCtx;
 
 
 
-	public InitialContext getInitCtx() {
-		return initCtx;
-	}
+    public InitialContext getInitCtx() {
+        return initCtx;
+    }
 
-	public void setInitCtx(InitialContext initCtx) {
-		this.initCtx = initCtx;
-	}
+    public void setInitCtx(InitialContext initCtx) {
+        this.initCtx = initCtx;
+    }
 
-	public FederationDBProvider(KeycloakSession sess,ComponentModel model) {
-		this.session=sess;
-		this.model=model;
-		try	{
-			initCtx=new InitialContext();
-		}
-		catch(Exception e)	{
-			log1.error("Cannot create InitialContext",e);
-		}
+    public FederationDBProvider(KeycloakSession sess,ComponentModel model) {
+        this.session=sess;
+        this.model=model;
+        try	{
+            initCtx=new InitialContext();
+        }
+        catch(Exception e)	{
+            log1.error("Cannot create InitialContext",e);
+        }
 
-	}
+    }
 
-	@Override
-	public void close() {
-		log1.info("Closing FederationDB Provider");
+    @Override
+    public void close() {
+        log1.info("Closing FederationDB Provider");
 
-	}
-
-
-	@Override
-	public boolean isConfiguredFor(RealmModel arg0, UserModel arg1, String credentialType) {
-
-		return supportsCredentialType(credentialType);
-	}
-
-	@Override
-	public boolean isValid(RealmModel arg0, UserModel arg1, CredentialInput passwd) {
+    }
 
 
-		try	{
-			String dataSource1=model.getConfig().getFirst("Jndi_Name");
-			String query1=model.getConfig().getFirst("Passwd_query");
+    @Override
+    public boolean isConfiguredFor(RealmModel arg0, UserModel arg1, String credentialType) {
+
+        return supportsCredentialType(credentialType);
+    }
+
+    @Override
+    public boolean isValid(RealmModel arg0, UserModel arg1, CredentialInput passwd) {
+        Connection conn1=null;
+        PreparedStatement prep=null;
 
 
-			DataSource ds=(DataSource) initCtx
-					.lookup(dataSource1);
+        try	{
+            String dataSource1=model.getConfig().getFirst("Jndi_Name");
+            String query1=model.getConfig().getFirst("Passwd_query");
 
-			PreparedStatement prep=ds.getConnection().prepareStatement(query1);
-			prep.setString(1, arg1.getEmail());
 
-			ResultSet rs=prep.executeQuery();
-			rs.next();
-			String passwdDb=rs.getString("password");
+            DataSource ds=(DataSource) initCtx
+                    .lookup(dataSource1);
+            conn1=ds.getConnection();
+            prep=conn1.prepareStatement(query1);
+            prep.setString(1, arg1.getEmail());
 
-			if(passwd.getChallengeResponse().equals(passwdDb))	{
-				LoggerFactory.getLogger(FederationDBProvider.class).info("Password Matched for:"+arg1.getEmail());
-				return true;
-			}
-			else	{
-				LoggerFactory.getLogger(FederationDBProvider.class).info("Password Not Matched for:"+arg1.getEmail());
-				return false;
-			}
-		}
-		catch(Exception e)	{
-			LoggerFactory.getLogger(FederationDBProvider.class).error("Password Validation Error",e);
-			return false;
-		}
+            ResultSet rs=prep.executeQuery();
+            rs.next();
+            String passwdDb=rs.getString("password");
 
-	}
+            if(passwd.getChallengeResponse().equals(passwdDb))	{
+                LoggerFactory.getLogger(FederationDBProvider.class).info("Password Matched for:"+arg1.getEmail());
+                return true;
+            }
+            else	{
+                LoggerFactory.getLogger(FederationDBProvider.class).info("Password Not Matched for:"+arg1.getEmail());
+                return false;
+            }
+        }
+        catch(Exception e)	{
+            LoggerFactory.getLogger(FederationDBProvider.class).error("Password Validation Error",e);
+            return false;
+        }
+        finally {
+            try {
+                if(prep!=null)  {
+                    prep.close();
+                }
+                if(conn1!=null) {
+                    conn1.close();
+                }
+            }
+            catch(Exception e)  {
 
-	@Override
-	public boolean supportsCredentialType(String arg0) {
+            }
 
-		return arg0.equals(CredentialModel.PASSWORD);
-	}
+        }
 
-	@Override
-	public UserModel getUserByEmail(String arg0, RealmModel arg1) {
-		// TODO Auto-generated method stub
-		try	{
-			log1.debug("Get User By Email: "+arg0);
 
-			String dataSource1=model.getConfig().getFirst("Jndi_Name");
-			String query1=model.getConfig().getFirst("User_query");
+    }
 
-			DataSource ds=(DataSource) initCtx
-					.lookup(dataSource1);
+    @Override
+    public boolean supportsCredentialType(String arg0) {
 
-			PreparedStatement prep=ds.getConnection().prepareStatement(query1);
-			prep.setString(1, arg0);
+        return arg0.equals(CredentialModel.PASSWORD);
+    }
 
-			ResultSet rs=prep.executeQuery();
+    @Override
+    public UserModel getUserByEmail(String arg0, RealmModel arg1) {
+        // TODO Auto-generated method stub
 
-			if(!rs.next())	{
+        Connection conn1=null;
+        PreparedStatement prep=null;
 
-				log1.info("Email: "+arg0+" not found");
-				return null;
-			}
+        try	{
+            log1.debug("Get User By Email: "+arg0);
 
-			UserData userData=new UserData(session, arg1, model);
-			userData.setEmail(rs.getString("email"));
-			userData.setUsername(rs.getString("email"));
-			userData.setFirstName(rs.getString("firstName"));
+            String dataSource1=model.getConfig().getFirst("Jndi_Name");
+            String query1=model.getConfig().getFirst("User_query");
 
-			UserModel local = session.userLocalStorage().getUserByEmail(arg0, arg1);
-			if(local==null)	{
-				log1.debug("Local User Not Found, adding user to Local");
-				local = session.userLocalStorage().addUser(arg1, userData.getUsername());
-				local.setFederationLink(model.getId());
-				local.setEmail(userData.getEmail());
-				local.setUsername(userData.getEmail());
-				local.setCreatedTimestamp(System.currentTimeMillis());
-				local.setFirstName(userData.getFirstName());
-				local.setEnabled(true);
-				local.setEmailVerified(true);
-				log1.info("Local User Succesfully Created for email:"+userData.getEmail());
+            DataSource ds=(DataSource) initCtx
+                    .lookup(dataSource1);
 
-			}
+            conn1=ds.getConnection();
+            prep=conn1.prepareStatement(query1);
+            prep.setString(1, arg0);
 
-			if(local!=null)	{
-				log1.debug("Local User Exist,Delegating to Local User...");
-				return new UserModelDelegate(local) {
-					@Override
-					public void setUsername(String username) {
-						super.setUsername(userData.getEmail());
-					}
-				};
-			}
-			else	{
-				log1.debug("Local User not found");
-				return null;
-			}
-		}
-		catch(Exception e)	{
-			log1.error("Error getting user with email: "+arg0,e);
-			return null;
-		}
-	}
+            ResultSet rs=prep.executeQuery();
 
-	@Override
-	public UserModel getUserById(String arg0, RealmModel arg1) {
-		// TODO Auto-generated method stub
-		return getUserByEmail(arg0, arg1);
-	}
+            if(!rs.next())	{
 
-	@Override
-	public UserModel getUserByUsername(String arg0, RealmModel arg1) {
-		// TODO Auto-generated method stub
-		return getUserByEmail(arg0, arg1);
-	}
+                log1.info("Email: "+arg0+" not found");
+                return null;
+            }
+
+            UserData userData=new UserData(session, arg1, model);
+            userData.setEmail(rs.getString("email"));
+            userData.setUsername(rs.getString("email"));
+            userData.setFirstName(rs.getString("firstName"));
+
+            UserModel local = session.userLocalStorage().getUserByEmail(arg0, arg1);
+            if(local==null)	{
+                log1.debug("Local User Not Found, adding user to Local");
+                local = session.userLocalStorage().addUser(arg1, userData.getUsername());
+                local.setFederationLink(model.getId());
+                local.setEmail(userData.getEmail());
+                local.setUsername(userData.getEmail());
+                local.setCreatedTimestamp(System.currentTimeMillis());
+                local.setFirstName(userData.getFirstName());
+                local.setEnabled(true);
+                local.setEmailVerified(true);
+                log1.info("Local User Succesfully Created for email:"+userData.getEmail());
+
+            }
+
+            if(local!=null)	{
+                log1.debug("Local User Exist,Delegating to Local User...");
+                return new UserModelDelegate(local) {
+                    @Override
+                    public void setUsername(String username) {
+                        super.setUsername(userData.getEmail());
+                    }
+                };
+            }
+            else	{
+                log1.debug("Local User not found");
+                return null;
+            }
+        }
+        catch(Exception e)	{
+            log1.error("Error getting user with email: "+arg0,e);
+            return null;
+        }
+        finally {
+            try {
+                if(prep!=null)  {
+                    prep.close();
+                }
+                if(conn1!=null) {
+                    conn1.close();
+                }
+            }
+            catch(Exception e)  {
+
+            }
+
+        }
+    }
+
+    @Override
+    public UserModel getUserById(String arg0, RealmModel arg1) {
+        // TODO Auto-generated method stub
+        return getUserByEmail(arg0, arg1);
+    }
+
+    @Override
+    public UserModel getUserByUsername(String arg0, RealmModel arg1) {
+        // TODO Auto-generated method stub
+        return getUserByEmail(arg0, arg1);
+    }
 
 
 }
